@@ -290,10 +290,10 @@
             dirLight.position.set(4, -6, 6); scene.add(dirLight);
 
             const sphereGeom = new THREE.SphereGeometry(sphereRadius, sphereSegments, sphereSegments);
-            const sphereMat = new THREE.MeshPhongMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.10, shininess: 80, specular: 0x333333 });
+            const sphereMat = new THREE.MeshPhongMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.80, shininess: 80, specular: 0x333333 });
             sphere = new THREE.Mesh(sphereGeom, sphereMat); scene.add(sphere);
             const wireframeGeom = new THREE.WireframeGeometry(sphereGeom);
-            const wireframeMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.12 });
+            const wireframeMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.82 });
             scene.add(new THREE.LineSegments(wireframeGeom, wireframeMat));
             
             const poleGeom = new THREE.SphereGeometry(0.05, 16, 16);
