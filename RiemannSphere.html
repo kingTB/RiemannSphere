@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ספירת רימן - אינסוף ואפס</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Assistant', sans-serif;
+            margin: 0;
+            background-color: #0f172a; /* bg-slate-900 */
+            color: #cbd5e1; /* text-slate-300 */
+            overscroll-behavior: none;
+        }
+        .label { color: #38bdf8; /* text-sky-400 */ margin-left: 0.5rem; }
+        .control-panel { background-color: #1e293b; /* bg-slate-800 */ padding: 0.75rem; border-radius: 0.75rem; box-shadow: 0 10px 20px rgba(0,0,0,0.2), 0 6px 6px rgba(0,0,0,0.15); }
+        canvas { display: block; border-radius: 0.5rem; width: 100%; height: 100%; }
+        .value-display { min-width: 30px; text-align: left; color: #f1f5f9; /* text-slate-100 */ font-size:0.7rem; }
+        input[type="range"] { accent-color: #38bdf8; /* sky-400 */ }
+        h1 { color: #7dd3fc; /* text-sky-300 */ }
+        h2 { color: #38bdf8; /* text-sky-400 */ }
+        p { line-height: 1.7; margin-bottom: 0.5rem;}
+        ul { margin-bottom: 0.5rem; margin-right: 1rem; list-style-type: disc; } /* RTL list style */
+        .info-text { background-color: #1e293b; padding: 0.75rem; border-radius: 0.5rem; margin-top: 0.5rem;}
+
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-height: -webkit-fill-available;
+        }
+        .visualization-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            padding: 0.5rem 0.5rem 0 0.5rem;
+        }
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background-color: #1e293b; 
+            border-radius: 0.75rem; 
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+         .canvas-container:last-child {
+            margin-bottom: 0;
+        }
+        .controls-area {
+            flex-shrink: 0;
+            padding: 0.5rem;
+            overflow-y: auto;
+            max-height: 35vh; /* Max height for controls on small screens */
+        }
+        .canvas-title {
+            text-align: center;
+            font-size: 0.8rem; 
+            font-weight: 600;
+            padding: 0.2rem 0.4rem;
+            background-color: rgba(15, 23, 42, 0.7); 
+            color: #7dd3fc; 
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            border-radius: 0.375rem;
+            padding: 3px 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .explanation-panel {
+            background-color: #1e293b;
+            color: #cbd5e1; 
+            margin: 0.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            max-height: 0;
+            overflow-y: auto; 
+            transition: max-height 0.5s ease-in-out, padding 0.5s ease-in-out, opacity 0.5s ease-in-out;
+            opacity: 0;
+            padding: 0 1rem; 
+        }
+        .explanation-panel.visible {
+            max-height: 70vh; 
+            opacity: 1;
+            padding: 1rem; 
+        }
+        .explanation-panel h3 {
+            color: #7dd3fc; 
+            font-size: 1.2em; 
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+        }
+         .explanation-panel strong { color: #38bdf8; } 
+
+        .styled-button {
+            background-color: #0ea5e9; 
+            color: white;
+            font-weight: bold;
+            padding: 0.5rem 0.6rem; 
+            border-radius: 0.5rem;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease;
+            border: none;
+            cursor: pointer;
+            text-align: center;
+            font-size: 0.75rem; 
+        }
+        .styled-button:hover {
+            background-color: #0284c7; 
+        }
+        .styled-button:active {
+            transform: scale(0.98);
+        }
+        .button-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); 
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .slider-label-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body class="p-1">
+
+    <div class="main-container">
+        <header class="text-center py-2 flex-shrink-0">
+            <h1 class="text-xl font-bold">ספירת רימן והטלה סטריאוגרפית</h1>
+        </header>
+
+        <div class="visualization-area">
+            <div class="canvas-container">
+                <div class="canvas-title">המישור המרוכב (2D) <span id="infinityIndicatorComplexPlane" class="text-red-400"></span></div>
+                <canvas id="complexPlaneCanvas"></canvas>
+            </div>
+            <div class="canvas-container">
+                 <div class="canvas-title">ספירת רימן (3D)</div>
+                <div id="sphereContainer" class="w-full h-full"></div>
+            </div>
+        </div>
+
+        <div class="controls-area control-panel mt-1">
+            <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+                <div>
+                    <label for="inclination" class="block text-xs font-medium label">נטיית מישור (θ): <span id="inclinationValue" class="value-display">90</span>°</label>
+                    <input type="range" id="inclination" min="0" max="180" value="90" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div>
+                    <label for="azimuth" class="block text-xs font-medium label">אזימוט מישור (φ): <span id="azimuthValue" class="value-display">0</span>°</label>
+                    <input type="range" id="azimuth" min="0" max="360" value="0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div class="col-span-2">
+                    <label for="distance" class="block text-xs font-medium label">מרחק מישור מהראשית: <span id="distanceValue" class="value-display">0.0</span></label>
+                    <input type="range" id="distance" min="-0.99" max="0.99" value="0.0" step="0.01" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div class="col-span-2">
+                    <div class="slider-label-group">
+                        <label for="projectionLineDensity" class="block text-xs font-medium label">צפיפות קווי הטלה:</label>
+                        <span id="projectionLineDensityValue" class="value-display">20</span>
+                    </div>
+                    <input type="range" id="projectionLineDensity" min="1" max="50" value="20" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+            </div>
+            <div class="button-group mt-3">
+                <button id="zoomInButton" class="styled-button">זום +</button>
+                <button id="zoomOutButton" class="styled-button">זום -</button>
+                <button id="resetControls" class="styled-button">איפוס בקרה</button>
+                <button id="toggleProjectionLinesButton" class="styled-button">קווי הטלה (3D)</button>
+            </div>
+             <div class="mt-2"> 
+                <button id="toggleExplanation" class="styled-button w-full">הצג/הסתר הסבר</button>
+            </div>
+            <div class="info-text text-xs mt-2 text-center">
+                <p class="text-slate-300">
+                    מעגלים על הספירה מוקרנים למעגלים במישור. אם מעגל עובר דרך <strong class="text-red-400">הקוטב הצפוני (∞)</strong>, הוא מוקרן <strong class="text-green-400">לקו ישר</strong>.
+                </p>
+            </div>
+        </div>
+        
+        <div id="explanationPanel" class="explanation-panel">
+            <h3>מה אנחנו רואים כאן? הקסם של כדורים, מעגלים וקווים!</h3>
+            <p>ברוכים הבאים למסע ויזואלי מרתק! האם תהיתם פעם מהו "אינסוף"? האם אפשר לתפוס אותו, לתת לו מקום? ספירת רימן מאפשרת לנו לעשות בדיוק את זה, ובדרך חושפת קשר מפתיע בין מעגלים לקווים ישרים.</p>
+            <p>דמיינו שיש לנו <strong>כדור</strong> (זו "ספירת רימן" שלנו – השפה של עיגול תלת-ממדי) ודף נייר שטוח. אנחנו מטילים צל מהכדור על הדף בצורה מיוחדת.</p>
+            
+            <p><strong>השחקנים הראשיים:</strong></p>
+            <ul>
+                <li><strong>הכדור (ספירת רימן):</strong> זהו הכדור התלת-ממדי שאתם רואים.
+                    <ul>
+                        <li>הנקודה הכי למעלה עליו (<strong>הנקודה האדומה ∞</strong>) היא נקודה מיוחדת מאוד. זה המקום בו אנחנו "תופסים" את <strong>האינסוף</strong> והופכים אותו לנקודה מוחשית על הכדור!</li>
+                        <li>הנקודה הכי למטה (<strong>הנקודה הכחולה</strong>) מייצגת את <strong>נקודת האפס (0)</strong>.</li>
+                    </ul>
+                </li>
+                <li><strong>מישור החיתוך (המשטח השקוף בתלת-ממד):</strong> זהו המשטח התכלת השקוף שזז כשאתם מזיזים את הסליידרים. כשהוא "חותך" את הכדור, נוצר עליו <strong>המעגל הטורקיז</strong>.</li>
+                <li><strong>המישור המרוכב (הדף הדו-ממדי ורשת הייחוס בתלת-ממד):</strong> זהו "דף הנייר" שלנו. בתצוגה הדו-ממדית (למעלה), זה המשטח עם הצירים. שימו לב ל<strong>נקודה הכחולה הקטנה</strong> בראשית הצירים – זו ההטלה של נקודת האפס מהכדור. בתלת-ממד, מישור זה מיוצג על ידי רשת הקווים האופקית (ב-z=0).</li>
+            </ul>
+
+            <p><strong>איך נוצר הצל (הטלה סטריאוגרפית)?</strong></p>
+            <p>דמיינו פנס קטן שנמצא בדיוק בנקודת ה"אינסוף" (הקוטב הצפוני האדום).</p>
+            <ul>
+                <li>כל נקודה על המעגל הטורקיז שעל הכדור מטילה צל דרך הפנס הזה אל מישור הייחוס (z=0).</li>
+                <li>הצל הזה הוא <strong>הקו הירוק</strong> שאתם רואים (גם בתצוגה הדו-ממדית וגם על הרשת בתלת-ממד).</li>
+                <li>אם תרצו, כפתור "קווי הטלה (3D)" יראה לכם את "קרני האור" הדמיוניות האלה.</li>
+            </ul>
+
+            <p><strong>הקסם הגדול: מתי מעגל הופך לקו ישר?</strong></p>
+            <ul>
+                <li>בדרך כלל, מעגל על הכדור (הטורקיז) יוצר צל של מעגל על הדף (הירוק).</li>
+                <li><strong>אבל!</strong> אם המעגל הטורקיז על הכדור עובר בדיוק דרך נקודת ה"אינסוף" (הקוטב הצפוני האדום), הצל שלו על הדף (הקו הירוק) הופך להיות <strong>קו ישר!</strong></li>
+            </ul>
+
+            <p><strong>למה זה מעניין?</strong></p>
+            <p>זה מראה לנו ש<strong>קווים ישרים ומעגלים הם בעצם אותו סוג של צורה</strong>. קו ישר הוא פשוט "מעגל שעובר דרך האינסוף". הכדור הזה עוזר לנו לראות את הקשר המפתיע הזה, ולהבין את האינסוף כנקודה אמיתית במרחב מיוחד. נקודת האפס (הקוטב הדרומי) ממופה לראשית הצירים במישור, בעוד שהאינסוף (הקוטב הצפוני) "מתפזר" על פני כל המישור הרחוק.</p>
+        </div>
+
+    </div>
+
+    <script>
+        let scene, camera, renderer, sphere, controls, circleOnSphereMesh, northPoleMarker, southPoleMarker, infinitySprite;
+        let complexPlaneCtx, complexPlaneCanvas;
+        let projectionLinesGroup, slicingPlane3DMesh, projectedShape3DMesh, gridHelper3D; 
+        let showProjectionLines = false;
+
+        const sphereRadius = 1.5;
+        const sphereSegments = 32;
+        const circlePointsOnSphere = 100; 
+        let projectionLineDensityFactor = 20; 
+
+        let cpWidth, cpHeight;
+        let complexPlaneScale = 30; 
+        const zoomFactor = 1.2;
+
+        // DOM Elements
+        const inclinationSlider = document.getElementById('inclination');
+        const azimuthSlider = document.getElementById('azimuth');
+        const distanceSlider = document.getElementById('distance');
+        const projectionLineDensitySlider = document.getElementById('projectionLineDensity');
+        const inclinationValue = document.getElementById('inclinationValue');
+        const azimuthValue = document.getElementById('azimuthValue');
+        const distanceValue = document.getElementById('distanceValue');
+        const projectionLineDensityValue = document.getElementById('projectionLineDensityValue');
+        const resetControlsButton = document.getElementById('resetControls');
+        const infinityIndicatorComplexPlane = document.getElementById('infinityIndicatorComplexPlane');
+        const toggleExplanationButton = document.getElementById('toggleExplanation');
+        const explanationPanel = document.getElementById('explanationPanel');
+        const zoomInButton = document.getElementById('zoomInButton');
+        const zoomOutButton = document.getElementById('zoomOutButton');
+        const toggleProjectionLinesButton = document.getElementById('toggleProjectionLinesButton');
+
+        const projectionLineMaterial = new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.35, linewidth: 0.5 }); 
+        const projectedShape3DMaterial = new THREE.LineBasicMaterial({ color: 0x34d399, linewidth: 2 }); // Green
+        const southPoleColorHex = '#60a5fa'; // For 2D canvas zero point
+
+        function createInfinitySprite() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 32;
+            const context = canvas.getContext('2d');
+            context.font = 'bold 30px Arial'; context.fillStyle = 'rgba(248, 113, 113, 1)'; 
+            context.textAlign = 'center'; context.textBaseline = 'middle';
+            context.fillText('∞', canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, depthWrite: false, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(0.5, 0.25, 1); 
+            return sprite;
+        }
+
+        function initThreeJS() {
+            const container = document.getElementById('sphereContainer');
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, -3.9, 2.0); 
+            camera.up.set(0, 0, 1); camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            dirLight.position.set(4, -6, 6); scene.add(dirLight);
+
+            const sphereGeom = new THREE.SphereGeometry(sphereRadius, sphereSegments, sphereSegments);
+            const sphereMat = new THREE.MeshPhongMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.30, shininess: 80, specular: 0x333333 });
+            sphere = new THREE.Mesh(sphereGeom, sphereMat); scene.add(sphere);
+            const wireframeGeom = new THREE.WireframeGeometry(sphereGeom);
+            const wireframeMat = new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.12 });
+            scene.add(new THREE.LineSegments(wireframeGeom, wireframeMat));
+            
+            const poleGeom = new THREE.SphereGeometry(0.05, 16, 16);
+            northPoleMarker = new THREE.Mesh(poleGeom, new THREE.MeshBasicMaterial({ color: 0xf87171 }));
+            northPoleMarker.position.set(0, 0, sphereRadius); scene.add(northPoleMarker);
+            infinitySprite = createInfinitySprite();
+            infinitySprite.position.set(0, 0.28, sphereRadius + 0.15); scene.add(infinitySprite);
+            southPoleMarker = new THREE.Mesh(poleGeom, new THREE.MeshBasicMaterial({ color: parseInt(southPoleColorHex.replace("#","0x")) })); // Use hex for south pole
+            southPoleMarker.position.set(0, 0, -sphereRadius); scene.add(southPoleMarker);
+
+            const circleMat = new THREE.LineBasicMaterial({ color: 0x2dd4bf, linewidth: 3.5 }); // teal-400
+            circleOnSphereMesh = new THREE.LineLoop(new THREE.BufferGeometry(), circleMat); scene.add(circleOnSphereMesh);
+
+            projectionLinesGroup = new THREE.Group(); scene.add(projectionLinesGroup);
+
+            const slicingPlaneGeom = new THREE.PlaneGeometry(sphereRadius * 3.5, sphereRadius * 3.5, 2, 2); 
+            const slicingPlaneMat = new THREE.MeshPhongMaterial({
+                color: 0x7dd3fc, 
+                transparent: true, 
+                opacity: 0.15, 
+                side: THREE.DoubleSide,
+                shininess: 20,
+                depthWrite: false
+            });
+            slicingPlane3DMesh = new THREE.Mesh(slicingPlaneGeom, slicingPlaneMat);
+            scene.add(slicingPlane3DMesh);
+            
+            gridHelper3D = new THREE.GridHelper(sphereRadius * 5, 10, 0x64748b, 0x475569); 
+            gridHelper3D.position.set(0,0,0); 
+            gridHelper3D.rotation.x = Math.PI / 2; 
+            scene.add(gridHelper3D);
+
+
+            projectedShape3DMesh = new THREE.Line(new THREE.BufferGeometry(), projectedShape3DMaterial);
+            scene.add(projectedShape3DMesh);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; controls.dampingFactor = 0.07; controls.minDistance = sphereRadius * 0.5; controls.maxDistance = 12; controls.target.set(0,0,0);
+
+            window.addEventListener('resize', onWindowResizeSphere, false); onWindowResizeSphere(); 
+        }
+        
+        function onWindowResizeSphere() {
+            const container = document.getElementById('sphereContainer');
+            if (!container || !renderer || !camera) return;
+            const newWidth = container.clientWidth; const newHeight = container.clientHeight;
+            if (newWidth === 0 || newHeight === 0) return; 
+            camera.aspect = newWidth / newHeight; camera.updateProjectionMatrix();
+            renderer.setSize(newWidth, newHeight);
+        }
+
+        function initComplexPlaneCanvas() {
+            complexPlaneCanvas = document.getElementById('complexPlaneCanvas');
+            complexPlaneCtx = complexPlaneCanvas.getContext('2d');
+            const container = complexPlaneCanvas.parentElement;
+            const newWidth = container.clientWidth; const newHeight = container.clientHeight;
+            if (newWidth === 0 || newHeight === 0) return;
+            complexPlaneCanvas.width = newWidth; complexPlaneCanvas.height = newHeight;
+            cpWidth = newWidth; cpHeight = newHeight;
+            complexPlaneScale = Math.min(cpWidth, cpHeight) / (2 * sphereRadius * 1.8); 
+            drawComplexPlaneAxes();
+            window.addEventListener('resize', onWindowResizeComplexPlane, false);
+        }
+
+        function onWindowResizeComplexPlane() {
+            const container = complexPlaneCanvas.parentElement;
+            if (!container || !complexPlaneCanvas) return;
+            const newWidth = container.clientWidth; const newHeight = container.clientHeight;
+            if (newWidth === 0 || newHeight === 0) return;
+            complexPlaneCanvas.width = newWidth; complexPlaneCanvas.height = newHeight;
+            cpWidth = newWidth; cpHeight = newHeight;
+            updateAndDraw(); 
+        }
+
+        function drawComplexPlaneAxes() {
+            if (!complexPlaneCtx) return;
+            complexPlaneCtx.clearRect(0, 0, cpWidth, cpHeight);
+            complexPlaneCtx.strokeStyle = '#475569'; complexPlaneCtx.lineWidth = 1;
+            const originX = cpWidth / 2; const originY = cpHeight / 2;
+            complexPlaneCtx.beginPath(); complexPlaneCtx.moveTo(0, originY); complexPlaneCtx.lineTo(cpWidth, originY); complexPlaneCtx.stroke();
+            complexPlaneCtx.beginPath(); complexPlaneCtx.moveTo(originX, 0); complexPlaneCtx.lineTo(originX, cpHeight); complexPlaneCtx.stroke();
+            complexPlaneCtx.fillStyle = '#94a3b8'; complexPlaneCtx.font = '10px Assistant';
+            complexPlaneCtx.textAlign = 'left'; complexPlaneCtx.fillText('ממשי', 5, originY - 5);
+            complexPlaneCtx.textAlign = 'right'; complexPlaneCtx.fillText('מדומה', originX - 5, 12);
+            complexPlaneCtx.strokeStyle = '#334155'; const gridSize = complexPlaneScale;
+            for (let x = originX + gridSize; x < cpWidth; x += gridSize) { complexPlaneCtx.beginPath(); complexPlaneCtx.moveTo(x, 0); complexPlaneCtx.lineTo(x, cpHeight); complexPlaneCtx.stroke(); }
+            for (let x = originX - gridSize; x > 0; x -= gridSize) { complexPlaneCtx.beginPath(); complexPlaneCtx.moveTo(x, 0); complexPlaneCtx.lineTo(x, cpHeight); complexPlaneCtx.stroke(); }
+            for (let y = originY + gridSize; y < cpHeight; y += gridSize) { complexPlaneCtx.beginPath(); complexPlaneCtx.moveTo(0, y); complexPlaneCtx.lineTo(cpWidth, y); complexPlaneCtx.stroke(); }
+            for (let y = originY - gridSize; y > 0; y -= gridSize) { complexPlaneCtx.beginPath(); complexPlaneCtx.moveTo(0, y); complexPlaneCtx.lineTo(cpWidth, y); complexPlaneCtx.stroke(); }
+
+            // Draw zero point (projection of South Pole)
+            const zeroCanvasCoords = mapToCanvas(0,0);
+            complexPlaneCtx.beginPath();
+            complexPlaneCtx.arc(zeroCanvasCoords.x, zeroCanvasCoords.y, 4, 0, 2 * Math.PI); // radius 4
+            complexPlaneCtx.fillStyle = southPoleColorHex;
+            complexPlaneCtx.fill();
+        }
+        
+        function mapToCanvas(u, v) {
+            return { x: cpWidth / 2 + u * complexPlaneScale, y: cpHeight / 2 - v * complexPlaneScale };
+        }
+
+        function updateAndDraw() {
+            if (!scene || !complexPlaneCtx) return; 
+
+            const inclination = parseFloat(inclinationSlider.value) * Math.PI / 180;
+            const azimuth = parseFloat(azimuthSlider.value) * Math.PI / 180;
+            const distFactor = parseFloat(distanceSlider.value);
+            const planeDistance = distFactor * sphereRadius;
+            projectionLineDensityFactor = parseInt(projectionLineDensitySlider.value);
+
+
+            inclinationValue.textContent = inclinationSlider.value;
+            azimuthValue.textContent = azimuthSlider.value;
+            distanceValue.textContent = distFactor.toFixed(2);
+            projectionLineDensityValue.textContent = projectionLineDensitySlider.value;
+
+
+            const n = new THREE.Vector3( Math.sin(inclination) * Math.cos(azimuth), Math.sin(inclination) * Math.sin(azimuth), Math.cos(inclination) );
+            const actualPlaneDistance = Math.min(Math.abs(planeDistance), sphereRadius - 1e-5) * Math.sign(planeDistance);
+            const circleRadius3D = Math.sqrt(sphereRadius * sphereRadius - actualPlaneDistance * actualPlaneDistance);
+            const circleCenter3D = n.clone().multiplyScalar(actualPlaneDistance);
+
+            slicingPlane3DMesh.position.copy(circleCenter3D);
+            const quaternion = new THREE.Quaternion();
+            const defaultPlaneNormal = new THREE.Vector3(0, 0, 1); 
+            quaternion.setFromUnitVectors(defaultPlaneNormal, n);
+            slicingPlane3DMesh.quaternion.copy(quaternion);
+
+
+            const spherePoints = []; 
+            if (circleRadius3D > 1e-3) {
+                let e1, e2;
+                if (Math.abs(n.z) < 0.999) e1 = new THREE.Vector3().crossVectors(n, new THREE.Vector3(0, 0, 1)).normalize();
+                else e1 = new THREE.Vector3().crossVectors(n, new THREE.Vector3(1, 0, 0)).normalize();
+                e2 = new THREE.Vector3().crossVectors(n, e1).normalize();
+                for (let i = 0; i <= circlePointsOnSphere; i++) {
+                    const angle = (i / circlePointsOnSphere) * 2 * Math.PI;
+                    const p = new THREE.Vector3(
+                        circleCenter3D.x + circleRadius3D * (Math.cos(angle) * e1.x + Math.sin(angle) * e2.x),
+                        circleCenter3D.y + circleRadius3D * (Math.cos(angle) * e1.y + Math.sin(angle) * e2.y),
+                        circleCenter3D.z + circleRadius3D * (Math.cos(angle) * e1.z + Math.sin(angle) * e2.z)
+                    );
+                    spherePoints.push(p);
+                }
+            }
+            
+            if (spherePoints.length > 0) {
+                 circleOnSphereMesh.geometry.setFromPoints(spherePoints);
+                 circleOnSphereMesh.geometry.attributes.position.needsUpdate = true;
+                 circleOnSphereMesh.visible = true;
+            } else {
+                 circleOnSphereMesh.visible = false;
+            }
+
+            while (projectionLinesGroup.children.length > 0) {
+                const child = projectionLinesGroup.children[0];
+                projectionLinesGroup.remove(child);
+                if(child.geometry) child.geometry.dispose(); 
+            }
+            projectionLinesGroup.visible = showProjectionLines;
+            const northPole3DVec = new THREE.Vector3(0, 0, sphereRadius);
+            const epsilonSmall = 1e-5;
+            const projectedPoints3D_on_z0 = []; 
+
+            if (spherePoints.length > 0) {
+                 const sampleStep = Math.max(1, Math.floor(circlePointsOnSphere / projectionLineDensityFactor));
+                 for (let i = 0; i < spherePoints.length; i++) { 
+                    const pSphere = spherePoints[i];
+                    let pProjectedOnPlane3D = null;
+
+                    if (Math.abs(sphereRadius - pSphere.z) < epsilonSmall) { 
+                        projectedPoints3D_on_z0.push(null); 
+                    } else {
+                        const u_cp = pSphere.x * sphereRadius / (sphereRadius - pSphere.z);
+                        const v_cp = pSphere.y * sphereRadius / (sphereRadius - pSphere.z);
+                        pProjectedOnPlane3D = new THREE.Vector3(u_cp, v_cp, 0);
+                        
+                        const maxVisDistance3D = sphereRadius * 7; 
+                        if (pProjectedOnPlane3D.lengthSq() > maxVisDistance3D * maxVisDistance3D) {
+                            pProjectedOnPlane3D.normalize().multiplyScalar(maxVisDistance3D);
+                            projectedPoints3D_on_z0.push(pProjectedOnPlane3D); 
+                            projectedPoints3D_on_z0.push(null); 
+                        } else {
+                            projectedPoints3D_on_z0.push(pProjectedOnPlane3D);
+                        }
+                    }
+
+                    if (showProjectionLines && (i % sampleStep === 0) && pProjectedOnPlane3D) {
+                        const lineGeom = new THREE.BufferGeometry().setFromPoints([northPole3DVec, pSphere, pProjectedOnPlane3D]);
+                        projectionLinesGroup.add(new THREE.Line(lineGeom, projectionLineMaterial));
+                    }
+                }
+            }
+
+
+            const isThroughNorthPole = Math.abs(n.z * sphereRadius - planeDistance) < 1e-4 && circleRadius3D > 1e-4;
+            const isJustNorthPole = Math.abs(planeDistance - sphereRadius) < 1e-4 && Math.abs(n.z - 1) < 1e-4;
+            const isJustSouthPole = Math.abs(planeDistance + sphereRadius) < 1e-4 && Math.abs(n.z + 1) < 1e-4;
+
+            drawComplexPlaneAxes(); // This will now also draw the zero point
+            complexPlaneCtx.beginPath(); // Start path for the main projected shape
+            complexPlaneCtx.strokeStyle = '#34d399'; complexPlaneCtx.lineWidth = 2.5; 
+            infinityIndicatorComplexPlane.textContent = ""; 
+
+            projectedShape3DMesh.visible = false; 
+            const validProjectedPoints3D = projectedPoints3D_on_z0.filter(p => p !== null);
+
+
+            if (isJustNorthPole) {
+                complexPlaneCtx.textAlign = 'center'; complexPlaneCtx.fillStyle = '#f87171'; 
+                complexPlaneCtx.font = '12px Assistant';
+                complexPlaneCtx.fillText("מוקרן לנקודת האינסוף (∞)", cpWidth / 2, cpHeight / 2);
+                infinityIndicatorComplexPlane.textContent = " (∞)";
+            } else if (isJustSouthPole) {
+                // The zero point is already drawn by drawComplexPlaneAxes.
+                // We might want to emphasize it if the circle IS the south pole.
+                const center = mapToCanvas(0,0);
+                complexPlaneCtx.beginPath(); // New path for emphasis, if needed
+                complexPlaneCtx.arc(center.x, center.y, 5, 0, 2 * Math.PI); // Slightly larger emphasis
+                complexPlaneCtx.fillStyle = southPoleColorHex; 
+                complexPlaneCtx.fill();
+
+                if (validProjectedPoints3D.length > 0) { 
+                    projectedShape3DMesh.geometry.dispose();
+                    if (validProjectedPoints3D.length === 1) {
+                         projectedShape3DMesh.geometry = new THREE.BufferGeometry().setFromPoints([validProjectedPoints3D[0], validProjectedPoints3D[0].clone().addScalar(0.001)]);
+                         projectedShape3DMesh.type = 'Line';
+                    } else { 
+                        projectedShape3DMesh.geometry = new THREE.BufferGeometry().setFromPoints(validProjectedPoints3D);
+                        projectedShape3DMesh.type = 'LineLoop'; 
+                    }
+                    projectedShape3DMesh.visible = true;
+                }
+            } else if (isThroughNorthPole) {
+                infinityIndicatorComplexPlane.textContent = " (קו → ∞)";
+                const C_line = planeDistance; 
+                let p1_canvas, p2_canvas;
+                const maxCoordVal2D = Math.max(cpWidth, cpHeight) / complexPlaneScale * 2.5;
+
+                let u1_3d, v1_3d, u2_3d, v2_3d;
+                const maxCoordVal3D = sphereRadius * 10; 
+
+                if (Math.abs(n.y) > 1e-4) { 
+                    const u1 = -maxCoordVal2D; const v1 = (C_line - n.x * u1) / n.y;
+                    const u2 = maxCoordVal2D;  const v2 = (C_line - n.x * u2) / n.y;
+                    p1_canvas = mapToCanvas(u1, v1); p2_canvas = mapToCanvas(u2, v2);
+                    u1_3d = -maxCoordVal3D; v1_3d = (C_line - n.x * u1_3d) / n.y;
+                    u2_3d = maxCoordVal3D;  v2_3d = (C_line - n.x * u2_3d) / n.y;
+                } else if (Math.abs(n.x) > 1e-4) { 
+                    const v1 = -maxCoordVal2D; const u1 = (C_line - n.y * v1) / n.x;
+                    const v2 = maxCoordVal2D;  const u2 = (C_line - n.y * v2) / n.x;
+                    p1_canvas = mapToCanvas(u1, v1); p2_canvas = mapToCanvas(u2, v2);
+                    v1_3d = -maxCoordVal3D; u1_3d = (C_line - n.y * v1_3d) / n.x;
+                    v2_3d = maxCoordVal3D;  u2_3d = (C_line - n.y * v2_3d) / n.x;
+                } else {
+                     complexPlaneCtx.textAlign = 'center'; complexPlaneCtx.fillStyle = '#fbbf24';
+                     complexPlaneCtx.font = '12px Assistant';
+                     complexPlaneCtx.fillText("קו לא מוגדר", cpWidth / 2, cpHeight / 2);
+                }
+                if (p1_canvas && p2_canvas) {
+                    complexPlaneCtx.moveTo(p1_canvas.x, p1_canvas.y); // This is part of the main projected shape path
+                    complexPlaneCtx.lineTo(p2_canvas.x, p2_canvas.y);
+                }
+                if (u1_3d !== undefined) {
+                    projectedShape3DMesh.geometry.dispose(); 
+                    projectedShape3DMesh.geometry = new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(u1_3d, v1_3d, 0), 
+                        new THREE.Vector3(u2_3d, v2_3d, 0)
+                    ]);
+                    projectedShape3DMesh.type = 'Line'; 
+                    projectedShape3DMesh.visible = true;
+                }
+
+            } else { 
+                let firstPoint = null;
+                for (let i = 0; i < spherePoints.length; i++) {
+                    const p = spherePoints[i];
+                    if (Math.abs(sphereRadius - p.z) < epsilonSmall) continue;
+                    const u = p.x * sphereRadius / (sphereRadius - p.z);
+                    const v = p.y * sphereRadius / (sphereRadius - p.z);
+                    const canvasP = mapToCanvas(u, v);
+                    if (Math.abs(canvasP.x) > cpWidth * 20 || Math.abs(canvasP.y) > cpHeight * 20) continue;
+                    
+                    if (!firstPoint) {
+                        complexPlaneCtx.moveTo(canvasP.x, canvasP.y); // Part of main projected shape path
+                        firstPoint = canvasP;
+                    } else {
+                        complexPlaneCtx.lineTo(canvasP.x, canvasP.y);
+                    }
+                }
+                if (firstPoint) complexPlaneCtx.closePath(); 
+
+                if (validProjectedPoints3D.length > 1) {
+                    projectedShape3DMesh.geometry.dispose();
+                    projectedShape3DMesh.geometry = new THREE.BufferGeometry().setFromPoints(validProjectedPoints3D);
+                    projectedShape3DMesh.type = 'LineLoop'; 
+                    projectedShape3DMesh.visible = true;
+                }
+            }
+            complexPlaneCtx.stroke(); // Stroke the main projected shape (circle/line)
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if(controls) controls.update();
+            if(renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        // Event Listeners
+        inclinationSlider.addEventListener('input', updateAndDraw);
+        azimuthSlider.addEventListener('input', updateAndDraw);
+        distanceSlider.addEventListener('input', updateAndDraw);
+        projectionLineDensitySlider.addEventListener('input', updateAndDraw);
+        
+        resetControlsButton.addEventListener('click', () => {
+            inclinationSlider.value = 90; azimuthSlider.value = 0; distanceSlider.value = 0.0;
+            projectionLineDensitySlider.value = 20;
+            complexPlaneScale = Math.min(cpWidth, cpHeight) / (2 * sphereRadius * 1.8); 
+            updateAndDraw();
+        });
+
+        toggleExplanationButton.addEventListener('click', () => explanationPanel.classList.toggle('visible'));
+        
+        zoomInButton.addEventListener('click', () => {
+            complexPlaneScale *= zoomFactor;
+            updateAndDraw();
+        });
+        zoomOutButton.addEventListener('click', () => {
+            complexPlaneScale /= zoomFactor;
+            if (complexPlaneScale < 0.1) complexPlaneScale = 0.1; 
+            updateAndDraw();
+        });
+        toggleProjectionLinesButton.addEventListener('click', () => {
+            showProjectionLines = !showProjectionLines;
+            updateAndDraw();
+        });
+        
+        setTimeout(() => {
+            initThreeJS(); initComplexPlaneCanvas(); 
+            updateAndDraw(); animate();
+        }, 150); 
+
+    </script>
+</body>
+</html>
